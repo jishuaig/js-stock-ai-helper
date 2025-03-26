@@ -124,4 +124,4 @@ def analyze_stock(stock_code: str):
 
 if __name__ == "__main__":
     # 示例：分析招商银行
-    analyze_stock("sh600036") 
+    analyze_stock("sh600036")

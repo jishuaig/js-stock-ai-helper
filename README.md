@@ -10,6 +10,7 @@
 - 支持单只股票和多只股票同时分析
 - 历史数据分析
 - 自定义追踪周期
+- A股市场潜力板块分析
 
 ## 主要组件
 
@@ -17,6 +18,7 @@
 - `stock_tracker_multi.py`: 多只股票同时追踪和分析
 - `stock_analysis.py`: 股票数据分析模块
 - `stock_func.py`: 核心功能函数库
+- `sector_analysis.py`: A股市场潜力板块分析模块
 
 ## 技术指标
 
@@ -125,6 +127,26 @@ python stock_tracker_single.py --stock_code sh600036 --interval 60
 ```bash
 python stock_tracker_multi.py --stock_list sh600036,sz000001 --interval 60
 ```
+
+### 潜力板块分析
+
+```bash
+python sector_analysis.py
+```
+
+分析维度包括：
+- 板块整体表现（涨跌幅、成交额、换手率）
+- 板块内个股表现（领涨股数量、领涨股涨幅）
+- 板块资金流向
+- 板块估值水平
+- 行业政策面分析
+
+输出内容包括：
+- 最具潜力板块排名
+- 每个板块的潜力评分
+- 潜力原因分析
+- 风险因素提示
+- 整体市场分析总结
 
 ## AI 分析输出
 
