@@ -7,7 +7,12 @@ from typing_extensions import TypedDict
 from langgraph.graph import StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode, tools_condition
+import os
 
+# 从环境变量获取 API 密钥
+api_key = os.getenv('DEEPSEEK_API_KEY')
+if not api_key:
+    raise ValueError("请设置环境变量 DEEPSEEK_API_KEY")
 
 class State(TypedDict):
     messages: Annotated[list, add_messages]
@@ -26,7 +31,7 @@ llm = ChatDeepSeek(
     max_tokens=None,        # 不限制生成长度
     timeout=30,             # API超时时间（秒）
     max_retries=2,           # API调用失败重试次数
-    api_key="sk-aacb49dcd0654de78c2b0d694296d5d1")
+    api_key=api_key)
 llm_with_tools = llm.bind_tools(tools)
 
 

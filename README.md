@@ -33,25 +33,39 @@
 pip install akshare pandas tabulate langchain-deepseek
 ```
 
+## 环境配置
+
+在使用之前，需要设置 DeepSeek API 密钥作为环境变量：
+
+```bash
+# Linux/Mac
+export DEEPSEEK_API_KEY='your-api-key-here'
+
+# Windows (CMD)
+set DEEPSEEK_API_KEY=your-api-key-here
+
+# Windows (PowerShell)
+$env:DEEPSEEK_API_KEY='your-api-key-here'
+```
+
 ## 使用方法
 
 ### 单只股票追踪
 
 ```bash
-python stock_tracker_single.py --stock_code sh600036 --interval 60 --api_key YOUR_API_KEY
+python stock_tracker_single.py --stock_code sh600036 --interval 60
 ```
 
 参数说明：
 - `--stock_code`: 股票代码（例如：sh600036）
 - `--interval`: 追踪周期（秒）
-- `--api_key`: DeepSeek API 密钥
 - `--verbose`: 是否显示详细信息
 - `--history_days`: 历史数据天数
 
 ### 多只股票追踪
 
 ```bash
-python stock_tracker_multi.py --stock_list sh600036,sz000001 --interval 60 --api_key YOUR_API_KEY
+python stock_tracker_multi.py --stock_list sh600036,sz000001 --interval 60
 ```
 
 ## AI 分析输出
@@ -66,7 +80,7 @@ python stock_tracker_multi.py --stock_list sh600036,sz000001 --interval 60 --api
 
 ## 注意事项
 
-1. 使用前请确保已获取 DeepSeek API 密钥
+1. 使用前请确保已设置 DEEPSEEK_API_KEY 环境变量
 2. 建议在实盘交易前进行充分的回测
 3. 该工具仅供参考，不构成投资建议
 4. 请遵守相关法律法规和交易所规则

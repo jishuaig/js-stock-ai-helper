@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import json
 import argparse
+import os
 from tabulate import tabulate
 from langchain_deepseek import ChatDeepSeek
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage
@@ -15,10 +16,14 @@ from stock_func import get_stock_data_func, get_historical_data_func, calculate_
 parser = argparse.ArgumentParser(description='股票实时追踪与交易信号生成')
 parser.add_argument('--stock_code', type=str, default='sh600036', help='股票代码，例如sh000001(上证指数)')
 parser.add_argument('--interval', type=int, default=60, help='追踪周期(秒)，默认60秒')
-parser.add_argument('--api_key', type=str, default='sk-aacb49dcd0654de78c2b0d694296d5d1', help='DeepSeek API密钥')
 parser.add_argument('--verbose', action='store_true', default=True, help='是否打印详细交互信息')
 parser.add_argument('--history_days', type=int, default=5, help='获取历史数据的天数，默认5天')
 args = parser.parse_args()
+
+# 从环境变量获取 API 密钥
+api_key = os.getenv('DEEPSEEK_API_KEY')
+if not api_key:
+    raise ValueError("请设置环境变量 DEEPSEEK_API_KEY")
 
 # 创建DeepSeek实例
 model = ChatDeepSeek(
@@ -27,7 +32,7 @@ model = ChatDeepSeek(
     max_tokens=None,
     timeout=120,
     max_retries=2,
-    api_key=args.api_key
+    api_key=api_key
 )
 # 打印消息的辅助函数
 def print_message(message, prefix=""):

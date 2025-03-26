@@ -2,6 +2,12 @@ from langchain_deepseek import ChatDeepSeek
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
+import os
+
+# 从环境变量获取 API 密钥
+api_key = os.getenv('DEEPSEEK_API_KEY')
+if not api_key:
+    raise ValueError("请设置环境变量 DEEPSEEK_API_KEY")
 
 # 创建DeepSeek实例
 model = ChatDeepSeek(
@@ -10,7 +16,7 @@ model = ChatDeepSeek(
     max_tokens=None,        # 不限制生成长度
     timeout=30,             # API超时时间（秒）
     max_retries=2,           # API调用失败重试次数
-    api_key="sk-aacb49dcd0654de78c2b0d694296d5d1"
+    api_key=api_key
 )
 
 @tool

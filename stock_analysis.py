@@ -5,6 +5,12 @@ from langchain_core.messages import HumanMessage, SystemMessage
 import pandas as pd
 from tabulate import tabulate
 from datetime import datetime
+import os
+
+# 从环境变量获取 API 密钥
+api_key = os.getenv('DEEPSEEK_API_KEY')
+if not api_key:
+    raise ValueError("请设置环境变量 DEEPSEEK_API_KEY")
 
 def print_model_io(messages, response):
     """打印模型的输入输出"""
@@ -78,7 +84,7 @@ def analyze_stock(stock_code: str):
         max_tokens=None,            # 不限制生成长度
         timeout=120,                # API超时时间（秒）
         max_retries=1,              # API调用失败重试次数
-        api_key="sk-aacb49dcd0654de78c2b0d694296d5d1"  # 使用您的API密钥
+        api_key=api_key
     )
     
     # 构建消息列表

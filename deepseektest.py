@@ -1,4 +1,10 @@
 from openai import OpenAI
+import os
+
+# 从环境变量获取 API 密钥
+api_key = os.getenv('DEEPSEEK_API_KEY')
+if not api_key:
+    raise ValueError("请设置环境变量 DEEPSEEK_API_KEY")
 
 def send_messages(messages):
     response = client.chat.completions.create(
@@ -9,7 +15,7 @@ def send_messages(messages):
     return response.choices[0].message
 
 client = OpenAI(
-    api_key="sk-aacb49dcd0654de78c2b0d694296d5d1",
+    api_key=api_key,
     base_url="https://api.deepseek.com",
 )
 
