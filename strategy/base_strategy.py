@@ -128,11 +128,7 @@ class BaseStrategy(ABC):
         
         # 计算夏普比率
         daily_returns = pd.Series([d['capital'] for d in self.daily_capital]).pct_change()
-        std_dev = daily_returns.std()
-        if std_dev == 0 or np.isnan(std_dev):
-            sharpe_ratio = np.nan
-        else:
-            sharpe_ratio = np.sqrt(252) * daily_returns.mean() / std_dev
+        sharpe_ratio = np.sqrt(252) * daily_returns.mean() / daily_returns.std()
         
         return {
             'initial_capital': self.initial_capital,
