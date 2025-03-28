@@ -6,37 +6,37 @@ import json
 
 
 # 定义工具函数
-def get_stock_data_func(stock_code: str) -> str:
+def get_etf_data_func(etf_code: str) -> str:
     """
-    获取股票实时数据
-    :param stock_code: 股票代码，例如：sh600036
-    :return: JSON格式的股票数据
+    获取ETF实时数据
+    :param etf_code: ETF代码，例如：sh510300
+    :return: JSON格式的ETF数据
     """
     try:
-        # 处理股票代码
-        if not stock_code.startswith(('sh', 'sz')):
-            return json.dumps({"error": "不支持的股票代码格式"}, ensure_ascii=False)
+        # 处理ETF代码
+        if not etf_code.startswith(('sh', 'sz')):
+            return json.dumps({"error": "不支持的ETF代码格式"}, ensure_ascii=False)
             
-        # 获取A股实时数据
-        stock_data = ak.stock_zh_a_spot_em()
-        if stock_data is None or stock_data.empty:
-            return json.dumps({"error": "获取股票数据失败：数据为空"}, ensure_ascii=False)
+        # 获取ETF实时数据
+        etf_data = ak.fund_etf_spot_em()
+        if etf_data is None or etf_data.empty:
+            return json.dumps({"error": "获取ETF数据失败：数据为空"}, ensure_ascii=False)
             
-        # 提取股票代码（去掉前缀）
-        code = stock_code[2:]
+        # 提取ETF代码（去掉前缀）
+        code = etf_code[2:]
         
-        # 过滤对应股票的数据
-        filtered_data = stock_data[stock_data['代码'] == code]
+        # 过滤对应ETF的数据
+        filtered_data = etf_data[etf_data['代码'] == code]
         if filtered_data.empty:
-            return json.dumps({"error": f"未找到股票代码 {stock_code} 的数据"}, ensure_ascii=False)
+            return json.dumps({"error": f"未找到ETF代码 {etf_code} 的数据"}, ensure_ascii=False)
             
         # 获取最新一条数据
         latest_data = filtered_data.iloc[0]
         
         # 构建返回数据
         result = {
-            "股票代码": stock_code,
-            "股票名称": latest_data.get("名称", ""),
+            "ETF代码": etf_code,
+            "ETF名称": latest_data.get("名称", ""),
             "最新价": float(latest_data.get("最新价", 0)),
             "涨跌幅": float(latest_data.get("涨跌幅", 0)),
             "涨跌额": float(latest_data.get("涨跌额", 0)),
@@ -48,64 +48,46 @@ def get_stock_data_func(stock_code: str) -> str:
             "今开": float(latest_data.get("今开", 0)),
             "昨收": float(latest_data.get("昨收", 0)),
             "量比": float(latest_data.get("量比", 0)),
-            "换手率": float(latest_data.get("换手率", 0)),
-            "市盈率": float(latest_data.get("市盈率-动态", 0)),
-            "市净率": float(latest_data.get("市净率", 0)),
-            "总市值": float(latest_data.get("总市值", 0)),
-            "流通市值": float(latest_data.get("流通市值", 0)),
-            "涨速": float(latest_data.get("涨速", 0)),
-            "5分钟涨跌": float(latest_data.get("5分钟涨跌", 0)),
-            "60日涨跌幅": float(latest_data.get("60日涨跌幅", 0)),
-            "年初至今涨跌幅": float(latest_data.get("年初至今涨跌幅", 0))
+            "换手率": float(latest_data.get("换手率", 0))
         }
         
         return json.dumps(result, ensure_ascii=False)
             
     except Exception as e:
-        print(f"获取股票数据出错: {str(e)}")
-        return json.dumps({"error": f"获取股票数据失败: {str(e)}"}, ensure_ascii=False)
+        print(f"获取ETF数据出错: {str(e)}")
+        return json.dumps({"error": f"获取ETF数据失败: {str(e)}"}, ensure_ascii=False)
 
-def get_historical_data_func(stock_code: str, days: int = 5) -> str:
-    """获取指定股票的历史K线数据，默认5天"""
+def get_etf_historical_data_func(etf_code: str, days: int = 5) -> str:
+    """获取指定ETF的历史K线数据，默认5天"""
     try:
-        if stock_code.startswith('sh'):
-            code = stock_code[2:]
-            data = ak.stock_zh_a_hist(symbol=code, period="daily", 
+        if etf_code.startswith('sh') or etf_code.startswith('sz'):
+            code = etf_code[2:]
+            data = ak.fund_etf_hist_em(symbol=code, period="daily", 
                                       start_date=(datetime.now() - timedelta(days=days)).strftime('%Y%m%d'),
                                       end_date=datetime.now().strftime('%Y%m%d'), adjust="qfq")
             return data.to_json(orient='records', force_ascii=False)
-        elif stock_code.startswith('sz'):
-            code = stock_code[2:]
-            data = ak.stock_zh_a_hist(symbol=code, period="daily", 
-                                      start_date=(datetime.now() - timedelta(days=days)).strftime('%Y%m%d'),
-                                      end_date=datetime.now().strftime('%Y%m%d'), adjust="qfq")
-            return data.to_json(orient='records', force_ascii=False)
-        elif stock_code == 'sh000001':
-            # 获取上证指数历史数据
-            data = ak.stock_zh_index_daily(symbol="sh000001")
-            return data.tail(days).to_json(orient='records', force_ascii=False)
-        return json.dumps({"error": "不支持的股票代码"})
+        return json.dumps({"error": "不支持的ETF代码"})
     except Exception as e:
-        print(f"获取历史数据出错: {str(e)}")
+        print(f"获取ETF历史数据出错: {str(e)}")
         return json.dumps({"error": str(e)})
     
-def get_week_historical_data_func(stock_code: str, weeks: int = 5) -> str:
-    """获取指定股票的历史周K线数据，默认5周"""
+def get_etf_historical_data_func(etf_code: str, days: int = 5) -> str:
+    """获取指定ETF的历史周K线数据，默认5周"""
     try:
-        # 处理股票代码如果是sh或者sz大小写开头，，则去掉前缀
-        if stock_code.startswith(('sh', 'sz', 'SH', 'SZ')):
-            stock_code = stock_code[2:]
+        # 处理ETF代码如果是sh或者sz开头，则去掉前缀
+        if etf_code.startswith(('sh', 'sz')):
+            etf_code = etf_code[2:]
         
         # 获取周K线数据
-        data = ak.stock_zh_a_hist(symbol=stock_code, period="weekly", 
-                                  start_date=(datetime.now() - timedelta(weeks=weeks)).strftime('%Y%m%d'),
-                                  end_date=datetime.now().strftime('%Y%m%d'), adjust="qfq")
+        data = ak.fund_etf_hist_em(symbol=etf_code, period="daily", 
+                                 start_date=(datetime.now() - timedelta(days==days)).strftime('%Y%m%d'),
+                                 end_date=datetime.now().strftime('%Y%m%d'), adjust="qfq")
         
         if data is None or data.empty:
             return json.dumps({"error": "获取周K线数据失败：数据为空"}, ensure_ascii=False)
             
         # 确保所有必需的列都存在
-        required_columns = ['日期', '股票代码', '开盘', '收盘', '最高', '最低', '成交量', '成交额', 
+        required_columns = ['日期', '开盘', '收盘', '最高', '最低', '成交量', '成交额', 
                           '振幅', '涨跌幅', '涨跌额', '换手率']
         
         # 创建新的DataFrame，只包含需要的列
@@ -116,8 +98,8 @@ def get_week_historical_data_func(stock_code: str, weeks: int = 5) -> str:
         # 添加日期列并格式化为yyyyMMdd
         result_data['日期格式化'] = pd.to_datetime(data['日期']).dt.strftime('%Y%m%d')
         
-        # 添加股票代码列
-        result_data['股票代码'] = stock_code
+        # 添加ETF代码列
+        result_data['ETF代码'] = etf_code
         
         # 添加其他列
         for col in ['开盘', '收盘', '最高', '最低', '成交量', '成交额', '振幅', '涨跌幅', '涨跌额', '换手率']:
@@ -129,13 +111,13 @@ def get_week_historical_data_func(stock_code: str, weeks: int = 5) -> str:
         return result_data.to_json(orient='records', force_ascii=False)
             
     except Exception as e:
-        print(f"获取周K线数据出错: {str(e)}")
-        return json.dumps({"error": f"获取周K线数据失败: {str(e)}"}, ensure_ascii=False)
+        print(f"获取ETF周K线数据出错: {str(e)}")
+        return json.dumps({"error": f"获取ETF周K线数据失败: {str(e)}"}, ensure_ascii=False)
 
-def calculate_technical_indicators_func(historical_data_json: str) -> str:
-    """计算常用技术指标"""
+def calculate_etf_technical_indicators_func(historical_data_json: str) -> str:
+    """计算ETF常用技术指标"""
     try:
-        # 将JSON字符串转换为DataFrame，避免FutureWarning
+        # 将JSON字符串转换为DataFrame
         import io
         historical_data = pd.read_json(io.StringIO(historical_data_json), orient='records')
         
@@ -247,22 +229,22 @@ def calculate_technical_indicators_func(historical_data_json: str) -> str:
         return json.dumps(result, ensure_ascii=False)
     except Exception as e:
         import traceback
-        print(f"计算技术指标时出错: {str(e)}")
+        print(f"计算ETF技术指标时出错: {str(e)}")
         print(traceback.format_exc())
         return json.dumps({"error": str(e)})
 
-def get_prompt(stock_code: str) -> str:
-    """获取股票的prompt"""
-    stock_data = get_stock_data_func(stock_code)
-    historical_data = get_week_historical_data_func(stock_code, 8)
-    technical_indicators = calculate_technical_indicators_func( get_week_historical_data_func(stock_code, 30))
+def get_etf_prompt(etf_code: str) -> str:
+    """获取ETF的prompt"""
+    etf_data = get_etf_data_func(etf_code)
+    historical_data = get_etf_historical_data_func(etf_code, 5)
+    technical_indicators = calculate_etf_technical_indicators_func(get_etf_historical_data_func(etf_code, 30))
     # 构建提示词
     prompt = f"""
-    你是一位专业的量化交易分析师，负责分析股票技术指标并提供买入、卖出或持有的建议。
-    请基于提供的股票数据，分析股票当前形式，并给出明确的交易信号和理由。
+    你是一位专业的ETF量化交易分析师，负责分析ETF技术指标并提供买入、卖出或持有的建议。
+    请基于提供的ETF数据，分析ETF当前形式，并给出明确的交易信号和理由。
 
-    股票数据：
-    1. 实时数据：{stock_data}
+    ETF数据：
+    1. 实时数据：{etf_data}
     2. 技术指标：{technical_indicators}
     3. 历史数据：{historical_data}
 
@@ -302,4 +284,4 @@ def get_prompt(stock_code: str) -> str:
     return prompt
 
 if __name__ == "__main__":
-    print(get_prompt("sh159740"))
+    print(get_etf_prompt("sz159740"))
