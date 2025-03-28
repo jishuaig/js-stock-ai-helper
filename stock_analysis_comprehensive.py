@@ -6,30 +6,33 @@ import json
 from typing import Dict, List, Tuple
 
 class ComprehensiveStockAnalyzer:
-    def __init__(self, stock_code: str):
+    def __init__(self, code: str):
         """
-        初始化股票分析器
-        :param stock_code: 股票代码，例如：sh600036
+        初始化分析器
+        :param code: 代码，例如：sh510300（ETF）或 sh600036（股票）
         """
-        self.stock_code = stock_code
+        self.code = code
         self.data = None
         self.indicators = {}
         self.realtime_data = None
         self.historical_data = None
         self.analysis_result = {}
+        # 判断是否为ETF
+        self.is_etf = code.startswith('sh51') or code.startswith('sz15')
 
     def fetch_data(self, start_date: str, end_date: str) -> pd.DataFrame:
-        """获取股票数据"""
+        """获取数据"""
         try:
-            # 获取日线数据
-            df = ak.stock_zh_a_hist(symbol=self.stock_code[2:], period="daily", 
-                                  start_date=start_date, end_date=end_date, adjust="qfq")
+            if self.is_etf:
+                # 获取ETF数据
+                df = ak.fund_etf_hist_em(symbol=self.code[2:], period="daily", 
+                                       start_date=start_date, end_date=end_date, adjust="qfq")
+            else:
+                # 获取股票数据
+                df = ak.stock_zh_a_hist(symbol=self.code[2:], period="daily", 
+                                      start_date=start_date, end_date=end_date, adjust="qfq")
             
-            # 删除股票代码列
-            if '股票代码' in df.columns:
-                df = df.drop('股票代码', axis=1)
-            
-            # 重命名列
+            # 统一列名
             column_map = {
                 '日期': '日期',
                 '开盘': '开盘',
@@ -80,7 +83,7 @@ class ComprehensiveStockAnalyzer:
         except Exception as e:
             print(f"获取数据失败: {str(e)}")
             return None
-            
+
     def calculate_indicators(self) -> Dict:
         """计算技术指标"""
         if self.data is None:
@@ -252,9 +255,17 @@ class ComprehensiveStockAnalyzer:
     def get_realtime_data(self) -> Dict:
         """获取实时数据"""
         try:
-            data = json.loads(get_stock_data_func(self.stock_code))
-            self.realtime_data = data
-            return data
+            if self.is_etf:
+                # 获取ETF实时数据
+                df = ak.fund_etf_spot_em()
+                stock_data = df[df['代码'] == self.code[2:]].iloc[0]
+            else:
+                # 获取股票实时数据
+                df = ak.stock_zh_a_spot_em()
+                stock_data = df[df['代码'] == self.code[2:]].iloc[0]
+            
+            self.realtime_data = stock_data.to_dict()
+            return self.realtime_data
         except Exception as e:
             print(f"获取实时数据失败: {str(e)}")
             return {}
@@ -262,9 +273,20 @@ class ComprehensiveStockAnalyzer:
     def get_historical_data(self, days: int = 60) -> Dict:
         """获取历史数据"""
         try:
-            data = json.loads(get_historical_data_func(self.stock_code, days))
-            self.historical_data = data
-            return data
+            end_date = datetime.now().strftime('%Y%m%d')
+            start_date = (datetime.now() - timedelta(days=days)).strftime('%Y%m%d')
+            
+            if self.is_etf:
+                # 获取ETF历史数据
+                df = ak.fund_etf_hist_em(symbol=self.code[2:], period="daily", 
+                                       start_date=start_date, end_date=end_date, adjust="qfq")
+            else:
+                # 获取股票历史数据
+                df = ak.stock_zh_a_hist(symbol=self.code[2:], period="daily", 
+                                      start_date=start_date, end_date=end_date, adjust="qfq")
+            
+            self.historical_data = df.to_dict('records')
+            return self.historical_data
         except Exception as e:
             print(f"获取历史数据失败: {str(e)}")
             return {}
@@ -1607,16 +1629,52 @@ def analyze_stock(stock_code: str) -> Dict:
         return {"error": str(e)}
 
 def main():
-    # 测试代码
-    analyzer = ComprehensiveStockAnalyzer("sh600036")
+    # 创建分析器实例
+    analyzer = ComprehensiveStockAnalyzer("sh510300")
+    
+    # 获取历史数据
+    print("正在获取历史数据...")
     df = analyzer.fetch_data("20230101", "20240321")
-    if df is not None:
-        indicators = analyzer.calculate_indicators()
-        analysis = analyzer.analyze()
-        print("\n=== 技术指标 ===")
-        print(json.dumps(indicators, indent=2, ensure_ascii=False))
-        print("\n=== 分析结果 ===")
-        print(json.dumps(analysis, indent=2, ensure_ascii=False))
+    if df is None:
+        print("获取数据失败")
+        return
+        
+    # 获取分析结果
+    print("正在计算技术指标...")
+    indicators = analyzer.calculate_indicators()
+    
+    print("正在分析市场情绪...")
+    sentiment = analyzer.analyze_market_sentiment()
+    
+    print("正在分析风险...")
+    risk = analyzer.analyze_risk()
+    
+    print("正在生成交易信号...")
+    signal = analyzer.generate_trading_signal()
+    
+    # 自定义JSON编码器
+    class NumpyEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, np.integer):
+                return int(obj)
+            if isinstance(obj, np.floating):
+                return float(obj)
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            return super().default(obj)
+    
+    # 使用自定义编码器输出结果
+    print("\n=== 技术指标 ===")
+    print(json.dumps(indicators, indent=2, ensure_ascii=False, cls=NumpyEncoder))
+    
+    print("\n=== 市场情绪分析 ===")
+    print(json.dumps(sentiment, indent=2, ensure_ascii=False, cls=NumpyEncoder))
+    
+    print("\n=== 风险分析 ===")
+    print(json.dumps(risk, indent=2, ensure_ascii=False, cls=NumpyEncoder))
+    
+    print("\n=== 交易信号 ===")
+    print(json.dumps(signal, indent=2, ensure_ascii=False, cls=NumpyEncoder))
 
 if __name__ == "__main__":
     main() 

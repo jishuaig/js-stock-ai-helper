@@ -162,21 +162,26 @@ class BacktestSystem:
         plt.show()
 
 def main():
-    # 测试回测系统
-    stock_code = "sh002456"  # 欧菲光
-    initial_capital = 100000.0
-    start_date = "20230101"
-    end_date = "20240321"
+    # 设置回测参数
+    stock_code = "sh513030"  # 沪深300ETF
+    start_date = "20240321"
+    end_date = "20250328"
+    initial_capital = 100000
+    stop_loss = 0.2  # 止损比例
+    take_profit = 0.4  # 止盈比例
     
+    # 创建回测实例
     backtest = BacktestSystem(stock_code, initial_capital)
-    # 调整止损止盈参数和交易费率
-    report = backtest.run_backtest(start_date, end_date, 
-                                 stop_loss=0.2,  # 进一步放宽止损
-                                 take_profit=0.4,  # 提高止盈
-                                 transaction_fee=0.0005)  # 考虑更合理的交易费率
     
+    # 运行回测
+    report = backtest.run_backtest(start_date, end_date, 
+                                 stop_loss=stop_loss, 
+                                 take_profit=take_profit,
+                                 transaction_fee=0.0003)
+    
+    # 打印回测结果
     print("\n=== 回测结果 ===")
-    print(f"初始资金: {report['initial_capital']:.2f}")
+    print(f"初始资金: {initial_capital:.2f}")
     print(f"最终资金: {report['final_capital']:.2f}")
     print(f"总收益率: {report['total_return']*100:.2f}%")
     print(f"年化收益率: {report['annual_return']*100:.2f}%")
