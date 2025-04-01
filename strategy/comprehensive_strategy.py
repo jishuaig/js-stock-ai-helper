@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from typing import Dict
-from .base_strategy import BaseStrategy
+from strategy.base_strategy import BaseStrategy
 
 class ComprehensiveStrategy(BaseStrategy):
     def __init__(self, stock_code: str, initial_capital: float = 100000.0):

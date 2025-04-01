@@ -1,3 +1,5 @@
+import sys
+import os
 import akshare as ak
 import pandas as pd
 import numpy as np
@@ -5,7 +7,13 @@ from datetime import datetime, timedelta
 import json
 import matplotlib.pyplot as plt
 from typing import Dict, List, Tuple, Type
+
+# 添加项目根目录到系统路径
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from strategy.base_strategy import BaseStrategy
+from strategy import LeftSideStrategy, OpenPriceStrategy
+from strategy import ComprehensiveStrategy
 
 # 设置matplotlib中文字体
 plt.rcParams['font.sans-serif'] = ['Arial Unicode MS']  # 用来正常显示中文标签
@@ -208,12 +216,12 @@ def compare_strategies(strategy1_class: Type[BaseStrategy],
     return report1, report2
 
 def main():
-    from strategy import LeftSideStrategy, ComprehensiveStrategy
+
     
     # 设置回测参数
-    stock_code = "510300"  # 沪深300ETF
+    stock_code = "159531"  # 沪深300ETF
     start_date = "20230101"
-    end_date = "20240328"
+    end_date = "20231230"
     initial_capital = 100000
     stop_loss = 0.1  # 止损比例
     take_profit = 0.2  # 止盈比例
@@ -221,7 +229,7 @@ def main():
     # 对比两个策略
     report1, report2 = compare_strategies(
         LeftSideStrategy,
-        ComprehensiveStrategy,
+        OpenPriceStrategy,
         stock_code,
         start_date,
         end_date,

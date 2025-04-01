@@ -1,9 +1,11 @@
-from .left_side_strategy import LeftSideStrategy
-from .right_side_strategy import RightSideStrategy
-from .grid_strategy import GridStrategy
-from .breakout_strategy import BreakoutStrategy
-from .dual_ma_strategy import DualMAStrategy
-from .base_strategy import BaseStrategy
+from strategy.left_side_strategy import LeftSideStrategy
+from strategy.right_side_strategy import RightSideStrategy
+from strategy.grid_strategy import GridStrategy
+from strategy.breakout_strategy import BreakoutStrategy
+from strategy.dual_ma_strategy import DualMAStrategy
+from strategy.base_strategy import BaseStrategy
+from strategy.open_price_strategy import OpenPriceStrategy
+from strategy.comprehensive_strategy import ComprehensiveStrategy
 
 __all__ = [
     'BaseStrategy', 
@@ -11,5 +13,7 @@ __all__ = [
     'RightSideStrategy',
     'GridStrategy',
     'BreakoutStrategy',
-    'DualMAStrategy'
+    'DualMAStrategy',
+    'OpenPriceStrategy',
+    'ComprehensiveStrategy'
 ] 

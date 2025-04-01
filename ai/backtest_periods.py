@@ -12,7 +12,7 @@ from strategy import (
     BreakoutStrategy, 
     DualMAStrategy
 )
-from backtest import BacktestEngine
+from strategy.backtest.backtest import BacktestEngine
 from typing import Dict, List
 
 def analyze_period(
