@@ -6,6 +6,7 @@ from strategy.dual_ma_strategy import DualMAStrategy
 from strategy.base_strategy import BaseStrategy
 from strategy.open_price_strategy import OpenPriceStrategy
 from strategy.comprehensive_strategy import ComprehensiveStrategy
+from strategy.rl_strategy import DeepRLStrategy
 
 __all__ = [
     'BaseStrategy', 
@@ -15,5 +16,6 @@ __all__ = [
     'BreakoutStrategy',
     'DualMAStrategy',
     'OpenPriceStrategy',
-    'ComprehensiveStrategy'
+    'ComprehensiveStrategy',
+    'DeepRLStrategy'
 ] 
