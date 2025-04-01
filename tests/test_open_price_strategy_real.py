@@ -21,11 +21,11 @@ def test_open_price_strategy_with_real_data():
     # 初始化策略，使用优化后的参数和新的仓位管理参数
     strategy = OpenPriceStrategy(
         stock_code="563300",
-        initial_capital=100000.0,
-        high_threshold=0.005,  # 使用之前优化的值
-        low_threshold=0.005,   # 使用之前优化的值
+        initial_capital=50000.0,
+        high_threshold=0.0005,  # 使用之前优化的值
+        low_threshold=0.00,   # 使用之前优化的值
         # 新增仓位管理参数 (使用默认值)
-        position_sizes=[0.3, 0.3, 0.4],
+        position_sizes=[0.5, 0.5],
         max_total_position_ratio=0.9,
         atr_periods=14,
         risk_per_trade_ratio=0.02,
@@ -33,7 +33,7 @@ def test_open_price_strategy_with_real_data():
     )
     
     # 获取历史数据
-    df = strategy.fetch_data('20240101', '20240830')
+    df = strategy.fetch_data('20230924', '20250330') # bull 
     if df is None:
         pytest.fail("无法获取历史数据")
     

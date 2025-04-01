@@ -4,9 +4,9 @@ from typing import Dict, List
 from strategy.base_strategy import BaseStrategy
 
 class OpenPriceStrategy(BaseStrategy):
-    def __init__(self, stock_code: str, initial_capital: float = 100000.0,
+    def __init__(self, stock_code: str, initial_capital: float = 50000.0,
                  high_threshold: float = 0.005, low_threshold: float = 0.005,
-                 position_sizes: List[float] = [0.3, 0.3, 0.4],  # 分批建仓比例
+                 position_sizes: List[float] = [0.5, 0.5],  # 分批建仓比例
                  max_total_position_ratio: float = 0.9,  # 最大总仓位比例
                  atr_periods: int = 14,  # ATR周期
                  risk_per_trade_ratio: float = 0.02,  # 单次交易风险比例
