@@ -5,6 +5,7 @@ import pandas as pd
 from sklearn.linear_model import LinearRegression
 import akshare as ak
 from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
 
 # 风格轮动策略 https://www.zhihu.com/question/21469608/answer/3156342205
 
@@ -177,5 +178,177 @@ def run_backtest():
     # 绘制净值曲线
     cerebro.plot(style='candlestick', volume=False)
 
+def calculate_today_signal(window=25):
+    """
+    计算当天的ETF交易信号
+    
+    参数:
+    window (int): 计算RSRS动量的窗口期，默认25天
+    
+    返回:
+    dict: 包含交易信号的字典
+    """
+    # 定义ETF列表
+    etfs = {
+        '510300': '沪深300ETF',
+        '510500': '中证500ETF',
+        '510880': '红利ETF',
+        '159915': '创业板ETF'
+    }
+    
+    # 设置日期范围 - 获取比窗口更长的历史数据以确保计算准确
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=window + 10)  # 多取几天数据，防止节假日等情况
+    
+    # 存储所有ETF的收盘价数据
+    prices_data = {}
+    
+    # 获取数据
+    print("正在获取ETF数据...")
+    for code, name in etfs.items():
+        try:
+            print(f"获取 {name}({code}) 的数据...")
+            df = ak.fund_etf_hist_em(
+                symbol=code,
+                period="daily",
+                start_date=start_date.strftime('%Y%m%d'),
+                end_date=end_date.strftime('%Y%m%d'),
+                adjust="qfq"
+            )
+            
+            if df.empty:
+                print(f"警告: 未获取到 {name}({code}) 数据")
+                continue
+                
+            # 确保日期列为datetime类型
+            df['日期'] = pd.to_datetime(df['日期'])
+            df.set_index('日期', inplace=True)
+            
+            # 保存收盘价数据
+            prices_data[code] = df['收盘']
+            print(f"成功获取 {name}({code}) 数据，共{len(df)}条记录")
+            
+        except Exception as e:
+            print(f"获取 {code} 数据时出错: {str(e)}")
+    
+    # 确保有数据返回
+    if not prices_data:
+        return {"error": "未能获取任何ETF数据"}
+    
+    # 计算各ETF的RSRS动量得分
+    scores = {}
+    latest_prices = {}
+    
+    for code, prices in prices_data.items():
+        try:
+            # 确保有足够的数据
+            if len(prices) < window:
+                print(f"警告: {code} 数据点不足，跳过计算")
+                continue
+            
+            # 获取最近窗口期的收盘价
+            recent_prices = prices.iloc[-window:].values
+            
+            # 数据有效性检查
+            if np.any(np.isnan(recent_prices)) or np.any(np.isinf(recent_prices)) or recent_prices[0] == 0:
+                print(f"警告: {code} 数据包含无效值")
+                continue
+            
+            # 计算RSRS动量得分
+            X = np.arange(1, window + 1).reshape(-1, 1)
+            y = recent_prices / recent_prices[0]  # 标准化价格
+            
+            model = LinearRegression().fit(X, y)
+            slope = model.coef_[0]
+            r_squared = model.score(X, y)
+            
+            # 计算最终得分
+            score = slope * r_squared * 10000
+            
+            # 保存得分和最新价格
+            scores[code] = score
+            latest_prices[code] = prices.iloc[-1]
+            
+        except Exception as e:
+            print(f"计算 {code} 的动量得分时出错: {str(e)}")
+    
+    # 确保有得分数据
+    if not scores:
+        return {"error": "未能计算任何ETF的动量得分"}
+    
+    # 找出得分最高的ETF
+    best_etf = max(scores, key=scores.get)
+    
+    # 构建结果
+    result = {
+        "date": datetime.now().strftime('%Y-%m-%d'),
+        "best_etf": {
+            "code": best_etf,
+            "name": etfs[best_etf],
+            "score": scores[best_etf],
+            "price": latest_prices[best_etf]
+        },
+        "all_scores": {code: {"name": etfs[code], "score": score, "price": latest_prices[code]} 
+                     for code, score in scores.items()},
+        "action": f"买入 {etfs[best_etf]}({best_etf})"
+    }
+    
+    # 绘制各ETF得分对比图
+    plt.figure(figsize=(10, 6))
+    codes = list(scores.keys())
+    score_values = [scores[code] for code in codes]
+    colors = ['#3cb371' if score > 0 else '#e74c3c' for score in score_values]
+    
+    plt.bar(codes, score_values, color=colors)
+    plt.axhline(y=0, color='k', linestyle='--', alpha=0.3)
+    plt.title('ETF动量得分对比 - ' + datetime.now().strftime('%Y-%m-%d'))
+    plt.ylabel('RSRS动量得分')
+    plt.tight_layout()
+    
+    # 保存图表
+    chart_filename = 'ETF动量得分_' + datetime.now().strftime('%Y%m%d') + '.png'
+    plt.savefig(chart_filename)
+    plt.close()
+    
+    result["chart"] = chart_filename
+    
+    return result
+
+def print_signal_report(signal):
+    """打印交易信号报告"""
+    if "error" in signal:
+        print(f"获取交易信号出错: {signal['error']}")
+        return
+        
+    print("\n" + "="*50)
+    print(f"ETF风格轮动交易信号 - {signal['date']}")
+    print("="*50)
+    
+    best = signal["best_etf"]
+    print(f"\n今日推荐: {best['name']}({best['code']})")
+    print(f"动量得分: {best['score']:.2f}")
+    print(f"最新价格: {best['price']:.4f}")
+    print(f"\n交易行动: {signal['action']}")
+    
+    print("\n所有ETF得分排名:")
+    print("-"*40)
+    print(f"{'ETF代码':<10}{'ETF名称':<15}{'动量得分':<15}{'最新价格':<10}")
+    print("-"*40)
+    
+    # 按得分从高到低排序
+    sorted_etfs = sorted(signal["all_scores"].items(), key=lambda x: x[1]["score"], reverse=True)
+    for code, info in sorted_etfs:
+        print(f"{code:<10}{info['name']:<15}{info['score']:<15.2f}{info['price']:<10.4f}")
+    
+    print("\n" + "="*50)
+    print(f"信号图表已保存为: {signal.get('chart', '无图表')}")
+    print("="*50)
+
+# 添加主函数调用
 if __name__ == '__main__':
-    run_backtest()
+    # 运行回测
+    # run_backtest()
+    
+    # 计算今日交易信号
+    today_signal = calculate_today_signal()
+    print_signal_report(today_signal)
