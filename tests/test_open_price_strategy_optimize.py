@@ -84,7 +84,7 @@ def test_optimize_parameters():
     plt.figure(figsize=(20, 10))
     
     # 设置中文字体
-    plt.rcParams['font.sans-serif'] = ['Arial Unicode MS']
+    plt.rcParams['font.sans-serif'] = ['Microsoft YaHei']  # Windows系统可用的中文字体
     plt.rcParams['axes.unicode_minus'] = False
     
     # 设置基本样式

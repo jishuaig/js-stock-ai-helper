@@ -29,3 +29,4 @@ dubbo-registry-*
 .vscode
 .cursor
 __pycache__
+.ipynb_checkpoints

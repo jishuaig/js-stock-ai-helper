@@ -15,7 +15,7 @@ import matplotlib as mpl
 def test_open_price_strategy_with_real_data():
     # 设置绘图风格
     sns.set_style('whitegrid')
-    plt.rcParams['font.sans-serif'] = ['Arial Unicode MS']  # Mac系统可用的中文字体
+    plt.rcParams['font.sans-serif'] = ['Microsoft YaHei']  # Windows系统可用的中文字体
     plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
     
     # 初始化策略，使用优化后的参数和新的仓位管理参数
@@ -33,7 +33,7 @@ def test_open_price_strategy_with_real_data():
     )
     
     # 获取历史数据
-    df = strategy.fetch_data('20230924', '20250330') # bull 
+    df = strategy.fetch_data('20250101', '20250330') 
     if df is None:
         pytest.fail("无法获取历史数据")
     
@@ -41,19 +41,19 @@ def test_open_price_strategy_with_real_data():
     final_portfolio = strategy.backtest(df)
     
     # 打印回测结果
-    print(f"\n回测结果:")
-    print(f"初始资金: {strategy.initial_capital:,.2f}")
-    print(f"最终资金: {final_portfolio['final_capital']:,.2f}")
-    print(f"总收益率: {final_portfolio['returns']:.2%}")
-    print(f"\n策略指标:")
-    print(f"夏普比率: {final_portfolio['metrics']['sharpe_ratio']:.2f}")
-    print(f"最大回撤: {final_portfolio['metrics']['max_drawdown']:.2%}")
-    print(f"年化收益率: {final_portfolio['metrics']['annual_return']:.2%}")
-    print(f"总交易次数: {final_portfolio['metrics']['total_trades']}")
+    print(f"\nBacktest Results:")
+    print(f"Initial Capital: {strategy.initial_capital:,.2f}")
+    print(f"Final Capital: {final_portfolio['final_capital']:,.2f}")
+    print(f"Total Return: {final_portfolio['returns']:.2%}")
+    print(f"\nStrategy Metrics:")
+    print(f"Sharpe Ratio: {final_portfolio['metrics']['sharpe_ratio']:.2f}")
+    print(f"Max Drawdown: {final_portfolio['metrics']['max_drawdown']:.2%}")
+    print(f"Annual Return: {final_portfolio['metrics']['annual_return']:.2%}")
+    print(f"Total Trades: {final_portfolio['metrics']['total_trades']}")
     
     # 创建图形
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 12), height_ratios=[2, 1])
-    fig.suptitle('中证2000ETF开盘价策略回测结果', fontsize=14, y=0.95)
+    fig.suptitle('ZZ2000ETF Opening Price Strategy Backtest', fontsize=14, y=0.95)
     
     # 绘制收益曲线（上图）
     daily_capital = pd.DataFrame(final_portfolio['daily_capital'])
@@ -67,16 +67,16 @@ def test_open_price_strategy_with_real_data():
     
     # 绘制策略收益率
     ax1.plot(strategy_returns.index, strategy_returns, 
-            label='策略收益率', color='#1f77b4', linewidth=2)
+            label='Strategy Return', color='#1f77b4', linewidth=2)
     
     # 绘制基准收益率
     ax1.plot(benchmark_returns.index, benchmark_returns, 
-            label='基准收益率', color='#ff7f0e', linestyle='--', linewidth=2)
+            label='Benchmark Return', color='#ff7f0e', linestyle='--', linewidth=2)
     
     # 设置上图属性
-    ax1.set_title('收益率对比图', pad=15)
+    ax1.set_title('Return Comparison', pad=15)
     ax1.set_xlabel('')
-    ax1.set_ylabel('收益率(%)')
+    ax1.set_ylabel('Return (%)')
     ax1.grid(True, linestyle='--', alpha=0.7)
     ax1.legend(loc='upper left')
     
@@ -88,7 +88,7 @@ def test_open_price_strategy_with_real_data():
     ax1.xaxis.set_major_formatter(mpl.dates.DateFormatter('%Y-%m'))
     
     # 绘制交易点位（下图）
-    ax2.plot(df.index, df['收盘'], color='gray', alpha=0.5, label='收盘价')
+    ax2.plot(df.index, df['收盘'], color='gray', alpha=0.5, label='Close Price')
     
     # 标记买入点和卖出点
     buy_points = [(t['date'], t['price']) for t in final_portfolio['transactions'] if t['type'] == 'buy']
@@ -96,16 +96,16 @@ def test_open_price_strategy_with_real_data():
     
     if buy_points:
         buy_dates, buy_prices = zip(*buy_points)
-        ax2.scatter(buy_dates, buy_prices, color='red', marker='^', s=100, label='买入点')
+        ax2.scatter(buy_dates, buy_prices, color='red', marker='^', s=100, label='Buy Points')
     
     if sell_points:
         sell_dates, sell_prices = zip(*sell_points)
-        ax2.scatter(sell_dates, sell_prices, color='green', marker='v', s=100, label='卖出点')
+        ax2.scatter(sell_dates, sell_prices, color='green', marker='v', s=100, label='Sell Points')
     
     # 设置下图属性
-    ax2.set_title('交易点位图', pad=15)
-    ax2.set_xlabel('日期')
-    ax2.set_ylabel('价格')
+    ax2.set_title('Trading Points', pad=15)
+    ax2.set_xlabel('Date')
+    ax2.set_ylabel('Price')
     ax2.grid(True, linestyle='--', alpha=0.7)
     ax2.legend(loc='upper left')
     
@@ -120,12 +120,78 @@ def test_open_price_strategy_with_real_data():
     plt.show()
     
     # 打印交易记录
-    print("\n交易记录:")
-    for trade in final_portfolio['transactions']:
-        print(f"日期: {trade['date'].strftime('%Y-%m-%d')}, "
-              f"类型: {trade['type']}, "
-              f"价格: {trade['price']:.2f}, "
-              f"数量: {trade['shares']}")
+    print("\nTransaction History:")
+    if final_portfolio['transactions']:
+        # 定义列宽
+        col_width_date = 12
+        col_width_type = 8
+        col_width_price = 10
+        col_width_shares = 10
+        col_width_amount = 15
+        col_width_balance = 15
+        col_width_total = 15
+        
+        # 创建表格样式的交易记录
+        print("┌" + "─" * col_width_date + "┬" + "─" * col_width_type + "┬" + 
+              "─" * col_width_price + "┬" + "─" * col_width_shares + "┬" + 
+              "─" * col_width_amount + "┬" + "─" * col_width_balance + "┬" + 
+              "─" * col_width_total + "┐")
+        
+        print("│{:^{}}│{:^{}}│{:^{}}│{:^{}}│{:^{}}│{:^{}}│{:^{}}│".format(
+            "Date", col_width_date,
+            "Type", col_width_type,
+            "Price", col_width_price,
+            "Shares", col_width_shares,
+            "Amount", col_width_amount,
+            "Balance", col_width_balance,
+            "Total", col_width_total
+        ))
+        
+        print("├" + "─" * col_width_date + "┼" + "─" * col_width_type + "┼" + 
+              "─" * col_width_price + "┼" + "─" * col_width_shares + "┼" + 
+              "─" * col_width_amount + "┼" + "─" * col_width_balance + "┼" + 
+              "─" * col_width_total + "┤")
+        
+        # 跟踪当前持仓
+        current_position = 0
+        
+        for trade in final_portfolio['transactions']:
+            date_str = trade['date'].strftime('%Y-%m-%d')
+            trade_type = trade['type']
+            price = trade['price']
+            shares = trade['shares']
+            
+            # 获取交易金额和账户余额
+            if trade_type == 'buy':
+                amount = trade.get('cost', price * shares)
+                amount_str = f"-{amount:.2f}"
+                current_position += shares
+            else:  # sell
+                amount = trade.get('revenue', price * shares)
+                amount_str = f"+{amount:.2f}"
+                current_position = 0  # 在策略中，sell是清仓操作
+            
+            balance = trade.get('capital_after', 0)
+            
+            # 计算总资产价值 (现金 + 持仓市值)
+            total_value = balance + (current_position * price)
+            
+            print("│{:^{}}│{:^{}}│{:^{}.3f}│{:^{}}│{:^{}}│{:^{}.2f}│{:^{}.2f}│".format(
+                date_str, col_width_date,
+                trade_type, col_width_type,
+                price, col_width_price,
+                shares, col_width_shares,
+                amount_str, col_width_amount,
+                balance, col_width_balance,
+                total_value, col_width_total
+            ))
+        
+        print("└" + "─" * col_width_date + "┴" + "─" * col_width_type + "┴" + 
+              "─" * col_width_price + "┴" + "─" * col_width_shares + "┴" + 
+              "─" * col_width_amount + "┴" + "─" * col_width_balance + "┴" + 
+              "─" * col_width_total + "┘")
+    else:
+        print("No transactions found")
 
 if __name__ == '__main__':
     test_open_price_strategy_with_real_data()

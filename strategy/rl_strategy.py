@@ -8,6 +8,7 @@ from tensorflow.keras.optimizers import Adam
 from collections import deque
 import random
 from strategy.base_strategy import BaseStrategy
+import os
 
 class DeepRLStrategy(BaseStrategy):
     def __init__(self, stock_code: str, initial_capital: float = 100000.0, 
@@ -46,6 +47,13 @@ class DeepRLStrategy(BaseStrategy):
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         
+        # 检查是否有可用的GPU
+        self.has_gpu = len(tf.config.list_physical_devices('GPU')) > 0
+        if self.has_gpu:
+            print("DeepRLStrategy: 将使用GPU加速训练")
+        else:
+            print("DeepRLStrategy: 无可用GPU，使用CPU训练")
+        
         # 创建模型
         self.model = self._build_model()
         self.target_model = self._build_model()
@@ -57,14 +65,32 @@ class DeepRLStrategy(BaseStrategy):
         
     def _build_model(self):
         """构建深度神经网络模型"""
+        # 确保使用正确的计算设备
+        if self.has_gpu:
+            with tf.device('/GPU:0'):
+                model = self._create_model_architecture()
+        else:
+            model = self._create_model_architecture()
+        return model
+        
+    def _create_model_architecture(self):
+        """创建模型架构"""
         model = Sequential()
-        # 使用更简化的网络结构
-        model.add(LSTM(32, input_shape=(self.lookback_window_size, 5), return_sequences=False))
-        model.add(Dropout(0.1))  # 减少dropout比例
+        # 使用更深但更窄的网络结构
+        model.add(LSTM(64, input_shape=(self.lookback_window_size, 5), return_sequences=True))
+        model.add(Dropout(0.2))
+        model.add(LSTM(32, return_sequences=False))
+        model.add(Dropout(0.1))
         model.add(Dense(16, activation="relu"))
         model.add(Dense(self.action_size, activation="linear"))
+        
         # 使用更高效的优化器
-        model.compile(loss="mse", optimizer=Adam(learning_rate=self.learning_rate))
+        model.compile(
+            loss="mse", 
+            optimizer=Adam(learning_rate=self.learning_rate),
+            # 如果有GPU，启用混合精度
+            jit_compile=self.has_gpu  # 使用XLA编译提高GPU性能
+        )
         return model
     
     def update_target_model(self):
@@ -130,27 +156,48 @@ class DeepRLStrategy(BaseStrategy):
         
         # 重塑状态为模型输入形状
         state = np.reshape(state, [1, self.lookback_window_size, 5])
-        act_values = self.model.predict(state, verbose=0)
+        
+        # 确保使用正确的设备预测
+        if self.has_gpu:
+            with tf.device('/GPU:0'):
+                act_values = self.model.predict(state, verbose=0)
+        else:
+            act_values = self.model.predict(state, verbose=0)
+            
         return np.argmax(act_values[0])
     
     def replay(self, batch_size):
         """从记忆中随机抽样进行经验回放"""
         if len(self.memory) < batch_size:
             return
+        
+        # 创建配置以确保GPU训练  
+        train_device = '/GPU:0' if self.has_gpu else '/CPU:0'
+        
+        with tf.device(train_device):
+            minibatch = random.sample(self.memory, batch_size)
+            states = np.zeros((batch_size, self.lookback_window_size, 5))
+            targets = np.zeros((batch_size, self.action_size))
             
-        minibatch = random.sample(self.memory, batch_size)
-        for state, action, reward, next_state, done in minibatch:
-            state = np.reshape(state, [1, self.lookback_window_size, 5])
-            next_state = np.reshape(next_state, [1, self.lookback_window_size, 5])
-            
-            target = self.model.predict(state, verbose=0)
-            if done:
-                target[0][action] = reward
-            else:
-                t = self.target_model.predict(next_state, verbose=0)
-                target[0][action] = reward + self.gamma * np.amax(t)
+            # 预处理批次数据以减少循环中的计算量
+            for i, (state, action, reward, next_state, done) in enumerate(minibatch):
+                states[i] = state
                 
-            self.model.fit(state, target, epochs=1, verbose=0)
+                # 计算目标Q值
+                if done:
+                    target = reward
+                else:
+                    next_state_reshaped = np.reshape(next_state, [1, self.lookback_window_size, 5])
+                    t = self.target_model.predict(next_state_reshaped, verbose=0)
+                    target = reward + self.gamma * np.amax(t)
+                
+                # 获取当前预测
+                target_f = self.model.predict(np.reshape(state, [1, self.lookback_window_size, 5]), verbose=0)
+                targets[i] = target_f
+                targets[i, action] = target
+            
+            # 批量训练网络，减少多次调用模型的开销
+            self.model.fit(states, targets, epochs=1, verbose=0, batch_size=batch_size)
             
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
@@ -183,66 +230,71 @@ class DeepRLStrategy(BaseStrategy):
         best_profit = -float('inf')
         target_update_freq = 5  # 每5个回合更新一次目标网络
         
-        for e in range(episodes):
-            print(f"Episode {e+1}/{episodes}")
-            state = self.get_state(data, 0)
-            
-            done = False
-            total_profit = 0
-            self.inventory = 0
-            self.current_step = 0
-            last_buy_price = 0
-            
-            # 使用更高效的训练循环
-            for t in range(len(data) - 1):
-                # 选择动作
-                action = self.act(state)
+        # 设置训练设备
+        train_device = '/GPU:0' if self.has_gpu else '/CPU:0'
+        print(f"训练模型使用设备: {train_device}")
+        
+        with tf.device(train_device):
+            for e in range(episodes):
+                print(f"Episode {e+1}/{episodes}")
+                state = self.get_state(data, 0)
                 
-                # 执行动作
-                next_state = self.get_state(data, t + 1)
-                reward = 0
+                done = False
+                total_profit = 0
+                self.inventory = 0
+                self.current_step = 0
+                last_buy_price = 0
                 
-                # 简化奖励计算
-                if action == 0:  # 买入
-                    if self.inventory == 0:
-                        self.inventory += 1
-                        last_buy_price = train_data["收盘"].iloc[t]
-                        future_idx = min(t + 5, len(data) - 1)
-                        future_return = (train_data["收盘"].iloc[future_idx] - train_data["收盘"].iloc[t]) / train_data["收盘"].iloc[t]
-                        reward = future_return * 0.2
-                elif action == 1:  # 卖出
-                    if self.inventory > 0:
-                        self.inventory -= 1
-                        profit = (train_data["收盘"].iloc[t] - last_buy_price) / last_buy_price
-                        reward = profit
-                        total_profit += profit
-                else:  # 持有
-                    reward = -0.001
-                    if self.inventory > 0:
-                        hold_return = (train_data["收盘"].iloc[t] - last_buy_price) / last_buy_price
-                        reward += hold_return * 0.01
-                
-                done = t == len(data) - 2
-                
-                self.memorize(state, action, reward, next_state, done)
-                state = next_state
-                self.current_step += 1
-                
-                # 减少经验回放频率，每10步回放一次
-                if len(self.memory) > batch_size and t % 10 == 0:
-                    self.replay(batch_size)
+                # 使用更高效的训练循环
+                for t in range(len(data) - 1):
+                    # 选择动作
+                    action = self.act(state)
                     
-                if done:
-                    # 每几个回合才更新一次目标网络，而不是每回合更新
-                    if e % target_update_freq == 0:
-                        self.update_target_model()
-                    print(f"Episode: {e+1}/{episodes}, Total Profit: {total_profit:.4f}")
+                    # 执行动作
+                    next_state = self.get_state(data, t + 1)
+                    reward = 0
                     
-                    # 保存表现更好的模型
-                    if total_profit > best_profit:
-                        best_profit = total_profit
-                        print(f"保存最佳模型，利润: {best_profit:.4f}")
+                    # 简化奖励计算
+                    if action == 0:  # 买入
+                        if self.inventory == 0:
+                            self.inventory += 1
+                            last_buy_price = train_data["收盘"].iloc[t]
+                            future_idx = min(t + 5, len(data) - 1)
+                            future_return = (train_data["收盘"].iloc[future_idx] - train_data["收盘"].iloc[t]) / train_data["收盘"].iloc[t]
+                            reward = future_return * 0.2
+                    elif action == 1:  # 卖出
+                        if self.inventory > 0:
+                            self.inventory -= 1
+                            profit = (train_data["收盘"].iloc[t] - last_buy_price) / last_buy_price
+                            reward = profit
+                            total_profit += profit
+                    else:  # 持有
+                        reward = -0.001
+                        if self.inventory > 0:
+                            hold_return = (train_data["收盘"].iloc[t] - last_buy_price) / last_buy_price
+                            reward += hold_return * 0.01
                     
+                    done = t == len(data) - 2
+                    
+                    self.memorize(state, action, reward, next_state, done)
+                    state = next_state
+                    self.current_step += 1
+                    
+                    # 减少经验回放频率，每10步回放一次
+                    if len(self.memory) > batch_size and t % 10 == 0:
+                        self.replay(batch_size)
+                        
+                    if done:
+                        # 每几个回合才更新一次目标网络，而不是每回合更新
+                        if e % target_update_freq == 0:
+                            self.update_target_model()
+                        print(f"Episode: {e+1}/{episodes}, Total Profit: {total_profit:.4f}")
+                        
+                        # 保存表现更好的模型
+                        if total_profit > best_profit:
+                            best_profit = total_profit
+                            print(f"保存最佳模型，利润: {best_profit:.4f}")
+                        
             # 逐渐减小探索率
             if self.epsilon > self.epsilon_min:
                 self.epsilon *= self.epsilon_decay
@@ -250,7 +302,11 @@ class DeepRLStrategy(BaseStrategy):
     def predict_action(self, state):
         """使用训练好的模型预测动作"""
         state = np.reshape(state, [1, self.lookback_window_size, 5])
-        return np.argmax(self.model.predict(state, verbose=0)[0])
+        
+        # 使用正确的设备进行预测
+        predict_device = '/GPU:0' if self.has_gpu else '/CPU:0'
+        with tf.device(predict_device):
+            return np.argmax(self.model.predict(state, verbose=0)[0])
     
     def backtest_with_model(self, df: pd.DataFrame):
         """
@@ -281,56 +337,61 @@ class DeepRLStrategy(BaseStrategy):
             self.data["norm_volume"].values
         ]).T
         
+        # 设置回测设备
+        predict_device = '/GPU:0' if self.has_gpu else '/CPU:0'
+        print(f"回测使用设备: {predict_device}")
+        
         # 遍历每个交易日
-        for t in range(self.lookback_window_size, len(self.data)):
-            index = self.data.index[t]
-            current_price = self.data["收盘"].iloc[t]
-            
-            # 获取当前状态
-            state = self.get_state(data, t-1)
-            
-            # 预测动作
-            action = self.predict_action(state)
-            
-            # 0: 买入, 1: 卖出, 2: 持有
-            if action == 0 and self.position == 0:  # 买入
-                # 计算可买入数量
-                max_shares = int((self.current_capital * 0.9) / current_price / 100) * 100
-                if max_shares > 0:
-                    self.position = max_shares
-                    cost = current_price * self.position * (1 + 0.0003)  # 考虑手续费0.03%
-                    self.current_capital -= cost
+        with tf.device(predict_device):
+            for t in range(self.lookback_window_size, len(self.data)):
+                index = self.data.index[t]
+                current_price = self.data["收盘"].iloc[t]
+                
+                # 获取当前状态
+                state = self.get_state(data, t-1)
+                
+                # 预测动作
+                action = self.predict_action(state)
+                
+                # 0: 买入, 1: 卖出, 2: 持有
+                if action == 0 and self.position == 0:  # 买入
+                    # 计算可买入数量
+                    max_shares = int((self.current_capital * 0.9) / current_price / 100) * 100
+                    if max_shares > 0:
+                        self.position = max_shares
+                        cost = current_price * self.position * (1 + 0.0003)  # 考虑手续费0.03%
+                        self.current_capital -= cost
+                        self.trades.append({
+                            "date": index,
+                            "type": "buy",
+                            "price": current_price,
+                            "shares": self.position,
+                            "cost": cost,
+                            "capital": self.current_capital
+                        })
+                
+                elif action == 1 and self.position > 0:  # 卖出
+                    # 卖出所有持仓
+                    revenue = current_price * self.position * (1 - 0.0003)  # 考虑手续费0.03%
+                    self.current_capital += revenue
                     self.trades.append({
                         "date": index,
-                        "type": "buy",
+                        "type": "sell",
                         "price": current_price,
                         "shares": self.position,
-                        "cost": cost,
+                        "revenue": revenue,
                         "capital": self.current_capital
                     })
-            
-            elif action == 1 and self.position > 0:  # 卖出
-                # 卖出所有持仓
-                revenue = current_price * self.position * (1 - 0.0003)  # 考虑手续费0.03%
-                self.current_capital += revenue
-                self.trades.append({
+                    self.position = 0
+                
+                # 记录每日资金情况
+                daily_capital = self.current_capital
+                if self.position > 0:
+                    daily_capital += self.position * current_price
+                self.daily_capital.append({
                     "date": index,
-                    "type": "sell",
-                    "price": current_price,
-                    "shares": self.position,
-                    "revenue": revenue,
-                    "capital": self.current_capital
+                    "capital": daily_capital
                 })
-                self.position = 0
-            
-            # 记录每日资金情况
-            daily_capital = self.current_capital
-            if self.position > 0:
-                daily_capital += self.position * current_price
-            self.daily_capital.append({
-                "date": index,
-                "capital": daily_capital
-            })
             
         return self.get_results()
 

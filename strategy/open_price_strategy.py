@@ -165,41 +165,48 @@ class OpenPriceStrategy(BaseStrategy):
              print("指标计算失败或数据不足，无法执行回测")
              return self.get_results()
 
-        # 打印表头
-        print("\n策略执行情况：")
-        print(f"{'日期':<12}{'开盘价':>8}{'收盘价':>8}{'最高价':>8}{'最低价':>8}{'开盘差幅':>10}{'ATR':>8}{'信号':>8}{'仓位':>10}{'资金':>14}")
+        # 打印日志头部
+        print("\n策略执行情况:")
+        print("=" * 100)
+        print("日期      | 开盘价  | 收盘价  | 最高价  | 最低价  | 开盘差幅 | ATR    | 信号   | 持仓量   | 现金       | 总资产")
         print("-" * 100)
 
         # 遍历每个交易日
         for index, row in self.data.iterrows():
-            current_price = row['收盘'] # 使用收盘价进行交易决策和记录 (或可改为开盘价)
+            current_price = row['收盘'] # 使用收盘价进行交易决策和记录
             current_atr = row['ATR']
 
-             # 检查数据有效性
+            # 检查数据有效性
             if pd.isna(current_price) or pd.isna(current_atr):
-                 # 记录当天资金 (假设维持前一天状态)
-                 if self.daily_capital:
-                     self.daily_capital.append({
-                         'date': index,
-                         'capital': self.daily_capital[-1]['capital']
-                     })
-                 else:
-                     self.daily_capital.append({
-                         'date': index,
-                         'capital': self.initial_capital
-                     })
-                 continue # 跳过这个无效数据点
+                # 记录当天资金 (假设维持前一天状态)
+                if self.daily_capital:
+                    self.daily_capital.append({
+                        'date': index,
+                        'capital': self.daily_capital[-1]['capital']
+                    })
+                else:
+                    self.daily_capital.append({
+                        'date': index,
+                        'capital': self.initial_capital
+                    })
+                continue # 跳过这个无效数据点
 
             # 获取交易信号
             signal = self.get_trading_signal(row)
+            # 转换信号为中文
+            signal_cn = "持有"
+            if signal == "buy":
+                signal_cn = "买入"
+            elif signal == "sell":
+                signal_cn = "卖出"
 
             # 计算当前总权益（现金+持仓市值）
             total_equity = self.current_capital + self.position * current_price
             
-            # 打印当日数据和策略执行情况
+            # 打印当日数据
             date_str = index.strftime('%Y-%m-%d')
             diff_pct = row.get('开盘差幅', 0) * 100 if not pd.isna(row.get('开盘差幅', 0)) else 0
-            print(f"{date_str:<12}{row['开盘']:8.3f}{row['收盘']:8.3f}{row['最高']:8.3f}{row['最低']:8.3f}{diff_pct:10.2f}%{row['ATR']:8.3f}{signal:>8}{self.position:10}{self.current_capital:14.2f}")
+            print(f"{date_str} | {row['开盘']:.3f} | {row['收盘']:.3f} | {row['最高']:.3f} | {row['最低']:.3f} | {diff_pct:6.2f}% | {row['ATR']:.3f} | {signal_cn:6} | {self.position:8} | {self.current_capital:10.2f} | {total_equity:10.2f}")
 
             # 执行交易
             if signal == 'buy' and self.current_batch < len(self.position_sizes):
@@ -221,7 +228,7 @@ class OpenPriceStrategy(BaseStrategy):
                             'capital_after': self.current_capital,
                             'batch': self.current_batch # 记录这是第几批买入
                         })
-                        # 打印买入交易详情
+                        # 打印买入详情
                         print(f"    >>> 买入: {trade_size}股, 价格: {current_price:.3f}, 成本: {cost:.2f}, 剩余资金: {self.current_capital:.2f}, 第{self.current_batch}批")
 
             elif signal == 'sell' and self.position > 0:
@@ -238,7 +245,7 @@ class OpenPriceStrategy(BaseStrategy):
                     'revenue': revenue,
                     'capital_after': self.current_capital
                 })
-                # 打印卖出交易详情
+                # 打印卖出详情
                 print(f"    >>> 卖出: {shares_sold}股, 价格: {current_price:.3f}, 收入: {revenue:.2f}, 剩余资金: {self.current_capital:.2f}")
                 self.reset_position_state() # 重置分批建仓状态
 
@@ -248,6 +255,8 @@ class OpenPriceStrategy(BaseStrategy):
                 'date': index,
                 'capital': current_total_equity
             })
+
+        print("=" * 100)
 
         # 回测结束，强制平仓最后的持仓
         if self.position > 0:
@@ -266,13 +275,12 @@ class OpenPriceStrategy(BaseStrategy):
                     'note': 'End of backtest force sell'
                 })
                 # 打印强制平仓详情
-                print(f"\n    >>> 回测结束强制平仓: {shares_sold}股, 价格: {last_price:.3f}, 收入: {revenue:.2f}, 最终资金: {self.current_capital:.2f}")
+                print(f"\n>>> 回测结束强制平仓: {shares_sold}股, 价格: {last_price:.3f}, 收入: {revenue:.2f}, 最终资金: {self.current_capital:.2f}")
                 self.position = 0
                 self.reset_position_state()
                 # 更新最后一天的资金记录
                 if self.daily_capital:
                     self.daily_capital[-1]['capital'] = self.current_capital
-
 
         # 返回结果
         return self.get_results()

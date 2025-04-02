@@ -3,28 +3,70 @@ import numpy as np
 import matplotlib.pyplot as plt
 import akshare as ak
 from datetime import datetime
-from strategy.rl_strategy import DeepRLStrategy
 import time
 import tensorflow as tf
+import sys
+import os
 
-# 配置TensorFlow以提高性能
+# 添加父目录到路径
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 现在导入策略模块
+from strategy.rl_strategy import DeepRLStrategy
+
+# GPU诊断信息
+print("TensorFlow版本:", tf.__version__)
+print("检测到的GPU设备:")
+gpus = tf.config.list_physical_devices('GPU')
+for gpu in gpus:
+    print("  -", gpu.name, ":", gpu.device_type)
+
+# 如果没有检测到GPU，打印更多信息
+if not gpus:
+    print("警告: 未检测到GPU！")
+    print("检查环境变量:")
+    print("  CUDA_VISIBLE_DEVICES =", os.environ.get('CUDA_VISIBLE_DEVICES', '未设置'))
+    print("\n请确保:")
+    print("1. 已安装GPU驱动")
+    print("2. 已安装CUDA和cuDNN")
+    print("3. 安装了GPU版本的TensorFlow (tensorflow-gpu)")
+    print("4. 运行 'nvidia-smi' 确认GPU可用")
+
+# 强制使用GPU配置
 try:
-    # 使用动态内存分配
-    physical_devices = tf.config.list_physical_devices('GPU')
-    if len(physical_devices) > 0:
-        print("使用GPU加速训练")
-        tf.config.experimental.set_memory_growth(physical_devices[0], True)
-    else:
-        print("未检测到GPU，使用CPU训练")
+    # 清除之前的会话和设备设置
+    tf.keras.backend.clear_session()
+    
+    # 显式设置GPU可见性
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # 使用第一块GPU
+    
+    # 允许GPU内存动态增长
+    for gpu in gpus:
+        tf.config.experimental.set_memory_growth(gpu, True)
+    
+    # 优化GPU性能设置
+    tf.config.optimizer.set_jit(True)  # 启用XLA JIT编译
+    
+    # 使用混合精度
+    policy = tf.keras.mixed_precision.Policy('mixed_float16')
+    tf.keras.mixed_precision.set_global_policy(policy)
+    print(f"设置计算精度为: {policy.name}")
+    
+    # 验证GPU是否可用
+    with tf.device('/GPU:0'):
+        random_tensor = tf.random.normal([1000, 1000])
+        result = tf.matmul(random_tensor, random_tensor)
+        # 尝试获取结果，若GPU不可用会抛出异常
+        result.numpy()
+        print("GPU测试成功 - GPU已正确配置并可使用")
         
-    # 优化CPU计算
+    # 设置线程
     tf.config.threading.set_intra_op_parallelism_threads(4)
     tf.config.threading.set_inter_op_parallelism_threads(4)
     
-    # 使用混合精度
-    tf.keras.mixed_precision.set_global_policy('mixed_float16')
-except:
-    print("TensorFlow配置失败，使用默认设置")
+except Exception as e:
+    print(f"GPU配置错误: {str(e)}")
+    print("将回退到CPU")
 
 def test_rl_strategy():
     """测试深度强化学习交易策略"""
