@@ -73,7 +73,7 @@ class RSRSMomentum(bt.Indicator):
             return
             
         # 计算斜率和R²
-        prices = np.array(self.data.close.get(size=self.p.window))
+        prices = np.array(self.data.get(size=self.p.window))
         X = np.arange(1, self.p.window + 1).reshape(-1, 1)
         y = prices / prices[0]  # 标准化价格
         
@@ -88,8 +88,6 @@ class MomentumRotationStrategy(bt.Strategy):
     params = (
         ('momentum_window', 20),
         ('hold_period', 1),
-        ('stop_loss_pct', 8),        # 止损百分比，亏损超过此比例时触发
-        ('trailing_stop_pct', 10),   # 跟踪止损百分比，从最高点回撤此比例时触发
         ('printlog', True),
     )
 
@@ -103,14 +101,8 @@ class MomentumRotationStrategy(bt.Strategy):
         # 追踪交易统计数据
         self.trades_info = []
         self.trade_counts = {'total': 0, 'win': 0, 'loss': 0}
-        
-        # 记录止损信息
-        self.trailing_high = {}  # 记录各资产的最高价，用于跟踪止损
 
     def next(self):
-        # 每日检查止损条件
-        self.check_stops()
-        
         self.counter += 1
         
         # 每天计算一次
@@ -131,60 +123,14 @@ class MomentumRotationStrategy(bt.Strategy):
         # 选择得分最高的标的
         best_asset = max(valid_scores, key=valid_scores.get)
         
-        # 检查是否需要调整持仓
-        current_positions = [d for d in self.datas if self.getposition(d).size > 0]
-        current_position = current_positions[0] if current_positions else None
-        
-        # 只有当最佳资产与当前持仓不同时才进行交易
-        if current_position is None or current_position._name != best_asset:
-            # 调整持仓
-            for d in self.datas:
-                if d._name == best_asset:
-                    if self.getposition(d).size == 0:
-                        self.close()  # 先平其他仓位
-                        self.order_target_percent(d, target=0.99)  # 保留1%现金
-                else:
-                    self.order_target_percent(d, target=0)
-    
-    def check_stops(self):
-        """检查止损条件并执行止损"""
+        # 调整持仓
         for d in self.datas:
-            pos = self.getposition(d)
-            if pos.size > 0:
-                # 计算当前收益率
-                current_price = d.close[0]
-                entry_price = pos.price
-                current_return = (current_price / entry_price - 1) * 100
-                
-                # 更新该资产的历史最高价
-                if d._name not in self.trailing_high:
-                    self.trailing_high[d._name] = current_price
-                elif current_price > self.trailing_high[d._name]:
-                    self.trailing_high[d._name] = current_price
-                
-                # 计算从最高点的回撤
-                highest = self.trailing_high[d._name]
-                drawdown = (current_price / highest - 1) * 100
-                
-                # 固定止损：亏损超过止损线
-                if current_return <= -self.p.stop_loss_pct:
-                    self.close(d)
-                    self.log(f'固定止损触发: {d._name}, 亏损: {current_return:.2f}%')
-                    # 重置该资产的最高价记录
-                    if d._name in self.trailing_high:
-                        del self.trailing_high[d._name]
-                    return True
-                
-                # 跟踪止损：从最高点回撤超过阈值
-                if drawdown <= -self.p.trailing_stop_pct:
-                    self.close(d)
-                    self.log(f'跟踪止损触发: {d._name}, 从高点回撤: {drawdown:.2f}%')
-                    # 重置该资产的最高价记录
-                    if d._name in self.trailing_high:
-                        del self.trailing_high[d._name]
-                    return True
-        
-        return False
+            if d._name == best_asset:
+                if self.getposition(d).size == 0:
+                    self.close()  # 先平其他仓位
+                    self.order_target_percent(d, target=0.99)  # 保留1%现金
+            else:
+                self.order_target_percent(d, target=0)
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
@@ -197,9 +143,6 @@ class MomentumRotationStrategy(bt.Strategy):
                     order.executed.price,
                     order.executed.value,
                     order.executed.comm)
-                
-                # 买入时初始化跟踪止损的最高价
-                self.trailing_high[order.data._name] = order.executed.price
                 
             elif order.issell():
                 logstr = 'SELL EXECUTED: %s, Price: %.2f, Cost: %.2f, Comm %.2f' % (
@@ -332,8 +275,6 @@ def run_backtest():
     cerebro.addstrategy(MomentumRotationStrategy,
                        momentum_window=25,
                        hold_period=1,
-                       stop_loss_pct=12,      # 8%固定止损
-                       trailing_stop_pct=15,  # 10%跟踪止损
                        printlog=True)
     
     # 回测设置
@@ -817,164 +758,11 @@ def print_signal_report(signal):
     print(f"信号图表已保存为: {signal.get('chart', '无图表')}")
     print("="*50)
 
-def compare_stop_loss_params():
-    """对比不同止损参数的表现"""
-    print("\n" + "="*50)
-    print("不同止损参数的对比测试")
-    print("="*50)
-    
-    # 设置回测时间范围
-    start_date = datetime(2018, 8, 1) 
-    end_date = datetime(2025, 3, 31)
-    
-    # 定义ETF列表
-    etfs = {
-        '510300': '沪深300ETF', # 大盘风格
-        '512100': '中证1000ETF', # 小盘风格
-        '510880': '红利ETF', # 价值风格
-        '159915': '创业板ETF' # 成长风格
-    }
-    
-    # 定义不同的止损参数组合
-    stop_loss_params = [
-        {"stop_loss_pct": 5, "trailing_stop_pct": 8, "name": "激进止损"},
-        {"stop_loss_pct": 8, "trailing_stop_pct": 10, "name": "平衡止损"},
-        {"stop_loss_pct": 12, "trailing_stop_pct": 15, "name": "保守止损"},
-        {"stop_loss_pct": 99, "trailing_stop_pct": 99, "name": "无止损(基准)"}
-    ]
-    
-    results = []
-    
-    # 遍历每组参数进行回测
-    for params in stop_loss_params:
-        print(f"\n测试参数: {params['name']}")
-        print(f"固定止损: {params['stop_loss_pct']}%, 跟踪止损: {params['trailing_stop_pct']}%")
-        
-        cerebro = bt.Cerebro(stdstats=False)
-        cerebro.broker.setcash(100000)
-        cerebro.broker.setcommission(commission=0.0005)
-        
-        # 加载数据
-        for code, name in etfs.items():
-            try:
-                df = ak.fund_etf_hist_em(
-                    symbol=code, 
-                    period="daily",
-                    start_date=start_date.strftime('%Y%m%d'),
-                    end_date=end_date.strftime('%Y%m%d'),
-                    adjust="qfq"
-                )
-                
-                # 重命名列以匹配backtrader需要的格式
-                df = df.rename(columns={
-                    '日期': 'date',
-                    '开盘': 'open',
-                    '收盘': 'close',
-                    '最高': 'high',
-                    '最低': 'low',
-                    '成交量': 'volume'
-                })
-                
-                # 将日期列设置为索引
-                df['date'] = pd.to_datetime(df['date'])
-                df.set_index('date', inplace=True)
-                
-                # 创建数据源
-                data = bt.feeds.PandasData(dataname=df, name=code)
-                cerebro.adddata(data)
-            except Exception as e:
-                print(f"获取 {code} 数据时出错: {str(e)}")
-                continue
-        
-        # 添加策略
-        cerebro.addstrategy(
-            MomentumRotationStrategy,
-            momentum_window=25,
-            hold_period=1,
-            stop_loss_pct=params['stop_loss_pct'],
-            trailing_stop_pct=params['trailing_stop_pct'],
-            printlog=False  # 关闭详细日志以提高性能
-        )
-        
-        # 添加分析器
-        cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
-        cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
-        cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
-        cerebro.addanalyzer(bt.analyzers.TimeReturn, _name='time_return')
-        
-        # 运行回测
-        strats = cerebro.run()
-        strat = strats[0]
-        
-        # 收集结果
-        result = {
-            "名称": params['name'],
-            "固定止损": f"{params['stop_loss_pct']}%",
-            "跟踪止损": f"{params['trailing_stop_pct']}%",
-            "最终资产": cerebro.broker.getvalue(),
-            "总收益率": (cerebro.broker.getvalue() / 100000 - 1) * 100,
-            "年化收益率": strat.analyzers.returns.get_analysis()['rnorm100'],
-            "夏普比率": strat.analyzers.sharpe.get_analysis()['sharperatio'],
-            "最大回撤": strat.analyzers.drawdown.get_analysis()['max']['drawdown'],
-            "交易胜率": strat.get_win_rate(),
-            "交易次数": strat.trade_counts['total']
-        }
-        
-        results.append(result)
-        
-        print(f"总收益率: {result['总收益率']:.2f}%")
-        print(f"年化收益率: {result['年化收益率']:.2f}%")
-        print(f"夏普比率: {result['夏普比率']:.2f}")
-        print(f"最大回撤: {result['最大回撤']:.2f}%")
-        print(f"交易胜率: {result['交易胜率']:.2f}%")
-        print(f"交易次数: {result['交易次数']}")
-    
-    # 创建结果对比表格
-    print("\n" + "="*80)
-    print("止损参数对比结果汇总")
-    print("="*80)
-    
-    # 表头
-    headers = ["名称", "固定止损", "跟踪止损", "总收益率", "年化收益率", "夏普比率", "最大回撤", "交易胜率", "交易次数"]
-    
-    # 打印表头
-    header_format = "{:<10}{:<10}{:<10}{:<12}{:<12}{:<10}{:<10}{:<10}{:<10}"
-    print(header_format.format(*headers))
-    print("-"*80)
-    
-    # 打印每一行结果
-    row_format = "{:<10}{:<10}{:<10}{:<12.2f}{:<12.2f}{:<10.2f}{:<10.2f}{:<10.2f}{:<10}"
-    for result in results:
-        print(row_format.format(
-            result["名称"], 
-            result["固定止损"], 
-            result["跟踪止损"],
-            result["总收益率"],
-            result["年化收益率"],
-            result["夏普比率"],
-            result["最大回撤"],
-            result["交易胜率"],
-            result["交易次数"]
-        ))
-    
-    return results
-
 # 添加主函数调用
 if __name__ == '__main__':
+    # 运行回测
     run_backtest()
     
-    # 选择运行模式
-    # mode = "compare"  # 可选: "backtest", "compare", "signal"
-    
-    # if mode == "backtest":
-    #     # 运行单次回测
-    #     run_backtest()
-    # elif mode == "compare":
-    #     # 运行参数对比测试
-    #     compare_stop_loss_params()
-    # elif mode == "signal":
-    #     # 计算今日交易信号
-    #     today_signal = calculate_today_signal()
-    #     print_signal_report(today_signal)
-    # else:
-    #     print("未知模式，请选择 'backtest', 'compare' 或 'signal'")
+    # 计算今日交易信号
+    # today_signal = calculate_today_signal()
+    # print_signal_report(today_signal)
