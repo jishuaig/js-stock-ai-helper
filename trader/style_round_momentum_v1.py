@@ -718,8 +718,8 @@ def print_signal_report(signal):
 # 添加主函数调用
 if __name__ == '__main__':
     # 运行回测
-    # run_backtest()
+    run_backtest()
     
     # 计算今日交易信号
-    today_signal = calculate_today_signal()
-    print_signal_report(today_signal)
+    # today_signal = calculate_today_signal()
+    # print_signal_report(today_signal)
