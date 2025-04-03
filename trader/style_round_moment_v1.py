@@ -11,53 +11,10 @@ import seaborn as sns
 import matplotlib as mpl
 import os
 from matplotlib.font_manager import FontProperties
-
-# 解决matplotlib中文显示问题
-def setup_chinese_font():
-    """设置中文字体，优先使用系统自带中文字体"""
-    if os.name == 'nt':  # Windows系统
-        font_list = [
-            'Microsoft YaHei',  # 微软雅黑
-            'SimHei',          # 黑体
-            'SimSun',          # 宋体
-            'NSimSun',         # 新宋体
-            'FangSong',        # 仿宋
-            'KaiTi'            # 楷体
-        ]
-        
-        for font in font_list:
-            try:
-                # 检查字体是否可用
-                font_path = f"C:\\Windows\\Fonts\\{font}.ttf"
-                if os.path.exists(font_path):
-                    plt.rcParams['font.sans-serif'] = [font] + plt.rcParams['font.sans-serif']
-                    plt.rcParams['axes.unicode_minus'] = False
-                    print(f"成功设置中文字体: {font}")
-                    return FontProperties(fname=font_path)
-            except:
-                continue
-    else:  # Linux/Mac系统
-        font_list = [
-            'WenQuanYi Micro Hei',
-            'Heiti SC',
-            'Hiragino Sans GB',
-            'STHeiti',
-            'Source Han Sans CN',
-            'Microsoft YaHei'
-        ]
-        
-        for font in font_list:
-            if font in mpl.font_manager.findSystemFonts(fontpaths=None):
-                plt.rcParams['font.sans-serif'] = [font] + plt.rcParams['font.sans-serif']
-                plt.rcParams['axes.unicode_minus'] = False
-                print(f"成功设置中文字体: {font}")
-                return FontProperties(family=font)
-    
-    print("警告: 未找到可用的中文字体，图表中文可能显示为方框")
-    return None
+from font_manager import init_plot_style
 
 # 初始化中文字体
-chinese_font = setup_chinese_font()
+chinese_font = init_plot_style()
 
 # 风格轮动策略 https://www.zhihu.com/question/21469608/answer/3156342205
 
@@ -761,8 +718,8 @@ def print_signal_report(signal):
 # 添加主函数调用
 if __name__ == '__main__':
     # 运行回测
-    run_backtest()
+    # run_backtest()
     
     # 计算今日交易信号
-    # today_signal = calculate_today_signal()
-    # print_signal_report(today_signal)
+    today_signal = calculate_today_signal()
+    print_signal_report(today_signal)
